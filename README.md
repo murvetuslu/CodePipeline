@@ -6,7 +6,7 @@ Before running the cloudformation scripts, it should be uploaded to hello_word.z
 
 ## Running Cloudformation Scripts
 
-**Firstly**, create an AWS Cloudplatform stack via **CodePipeline.json** because Cloudformation stack will need some parameters to work properly. CI/CD Pipeline will be created after Cloudformation Stack Creating process is completed. 
+**Firstly**, create an AWS Cloudformation stack via **CodePipeline.json** because Cloudformation stack will need some parameters to work properly. CI/CD Pipeline will be created after Cloudformation Stack Creating process is completed. 
 When the codecommit source changed, codepipeline will trigger automatically and Cloudformation will create a change set with template.yml after that. For Cloudformation stack where lambda function is created, the change set will automatically execute.
 
 **Secondly**, create another cloudformation stack via **ALbTarget.json** ApplicationLoadBalancer. Target Group and Listener(Rule) will be created with dependencies after cloudformation stack completes. You can access successfully to Lambda Function with ALB Dns name after tracking this process.
