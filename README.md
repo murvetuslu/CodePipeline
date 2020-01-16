@@ -4,7 +4,7 @@
 
 Before running the cloudformation scripts, it should be uploaded to hello_word.zip(CodeCommitSource/hello_world.zip) file into your s3 Bucket in the root directory. The reason behind this upload is; when codecommit is created with cloudformation, codecommit gets the source from this s3 Bucket.
 
-## Rnning Cloudformation Script
+## Running Cloudformation Scripts
 
 **Firstly**, create an AWS Cloudplatform stack via **CodePipeline.json** because Cloudformation stack will need some parameters to work properly. CI/CD Pipeline will be created after Cloudformation Stack Creating process is completed. 
 When the codecommit source changed, codepipeline will trigger automatically and Cloudformation will create a change set with template.yml after that. For Cloudformation stack where lambda function is created, the change set will automatically execute.
