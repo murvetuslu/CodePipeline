@@ -1,0 +1,577 @@
+{
+  "Parameters": {
+    "CodeCommitSourceS3Bucket": {
+      "Default": "",
+      "Type": "String",
+      "Description": "Code Commit Source From S3 Bucket in hello_word.zip"
+    },
+    "CodePipelineArtifactS3Bucket": {
+      "Default": "",
+      "Type": "String",
+      "Description": "Code Pipeline Artfifact S3 Bucket"
+    }
+  },
+    "Resources": {    
+      "CodeCommitRepo": {
+        "Type": "AWS::CodeCommit::Repository",
+        "Properties": {
+            "RepositoryName": {
+                "Ref": "AWS::StackName"
+            },
+            "RepositoryDescription": "CodeCommit Repository for remediation solution",
+            "Code": {
+                "S3": {
+                    "Bucket": {
+                        "Ref": "CodeCommitSourceS3Bucket"
+                    },
+                    "Key": "hello_world.zip"
+                }
+            }
+        }
+      },
+      "BuildRole": {
+        "Type": "AWS::IAM::Role",
+        "Description": "test",
+        "Properties": {
+          "RoleName": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },"-Buildrole"
+                    ]
+                ]
+          },
+          "Path": "/",
+          "Policies": [
+            {
+              "PolicyName": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        },"-pipelineBuildpolicy"
+                    ]
+                ]
+              },
+              "PolicyDocument": {
+                "Statement": [
+                  {
+                    "Action": [
+                      "logs:CreateLogGroup",
+                      "logs:CreateLogStream",
+                      "logs:PutLogEvents"
+                    ],
+                    "Resource": [
+
+                      {
+                        "Fn::Sub": "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/*"
+                      }
+                    ],
+                    "Effect": "Allow"
+                  },
+                  {
+                    "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:GetBucketAcl",
+                    "s3:GetBucketLocation"
+                    ],
+                    "Resource": "*"
+                    ,
+                    "Effect": "Allow"
+                  },
+                  {
+                    "Action": [
+                      "codecommit:GitPull"
+                    ],
+                    "Resource": [
+
+                      {
+                        "Fn::Sub": "arn:${AWS::Partition}:codecommit:${AWS::Region}:${AWS::AccountId}:*"
+                      }
+                    ],
+                    "Effect": "Allow"
+                  },
+                  {
+                    "Action": [
+                      "codebuild:CreateReportGroup",
+                      "codebuild:CreateReport",
+                      "codebuild:UpdateReport",
+                      "codebuild:BatchPutTestCases"
+                    ],
+                    "Resource": [
+                      {
+                        "Fn::Sub": "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/*"
+                      }
+                    ],
+                    "Effect": "Allow"
+                  }
+                ]
+              }
+            }
+          ],
+          "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "codebuild.amazonaws.com",
+                  "codedeploy.amazonaws.com",
+                  "codepipeline.amazonaws.com",
+                  "elasticbeanstalk.amazonaws.com",
+                  "events.amazonaws.com",
+                  "lambda.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        }
+        }
+      },   
+      "CodeBuildProject": {
+        "Type": "AWS::CodeBuild::Project",
+        "Properties": {
+          "Name": {
+                "Fn::Sub": "${AWS::StackName}-Build"
+          },
+          "Description": "muruvet pipeline",
+          "ServiceRole": {
+            "Ref": "BuildRole"
+          },
+          "Artifacts": {
+            "Packaging": "zip",
+            "Type": "codepipeline"
+          },
+          "Environment": {
+            "ComputeType": "small",
+            "Image": "aws/codebuild/standard:3.0-19.11.26",
+            "Type": "LINUX_CONTAINER",
+            "EnvironmentVariables":[{
+                "Name" : "S3BUCKET",
+                "Type" : "PLAINTEXT",
+                "Value" : {
+                              "Ref": "CodeCommitSourceS3Bucket"
+                          }
+            }]
+          },
+          "Source": {
+            "BuildSpec": "buildspec.yml",
+            "Location": {
+              "Fn::Join": [
+                    "",
+                    [
+                        "https://git-codecommit.",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        ".amazonaws.com/v1/repos/",
+                        {
+                            "Ref": "AWS::StackName"
+                        }
+                    ]
+                ]
+            },
+            "Type": "codepipeline"
+          },
+
+          "LogsConfig":{
+                      
+            "CloudWatchLogs" : {
+            "Status" : "DISABLED"
+            },
+            "S3Logs" : {
+            "Status" : "DISABLED"
+            }
+
+          }
+        },
+        "DependsOn" : "BuildRole"
+      },
+      "CodePipelineCFNRole": {
+        "Type": "AWS::IAM::Role",
+        "Description": "test",
+        "Properties": {
+          "RoleName": {
+              "Fn::Sub": "${AWS::StackName}-PipelineRole"
+          },
+          "Path": "/",
+          "Policies": [
+            {
+              "PolicyName": {
+                  "Fn::Sub": "${AWS::StackName}-PipelinePolicy"
+              },
+              "PolicyDocument": {
+                "Statement": [
+                  {
+                    "Action": [
+                      "apigateway:*",
+                      "codedeploy:*",
+                      "lambda:*",
+                      "cloudformation:CreateChangeSet",
+                      "iam:GetRole",
+                      "iam:CreateRole",
+                      "iam:DeleteRole",
+                      "iam:PutRolePolicy",
+                      "iam:AttachRolePolicy",
+                      "iam:DeleteRolePolicy",
+                      "iam:DetachRolePolicy",
+                      "iam:PassRole",
+                      "s3:GetObject",
+                      "s3:GetObjectVersion",
+                      "s3:GetBucketVersioning"
+                    ],
+                    "Resource": "*",
+                    "Effect": "Allow"
+                  },
+                  {
+                    "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:GetBucketAcl",
+                    "s3:GetBucketLocation"
+                    ],
+                    "Resource": "*"
+                    ,
+                    "Effect": "Allow"
+                  }
+                ]
+              }
+            }
+          ],
+          "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "cloudformation.amazonaws.com",
+                  "codedeploy.amazonaws.com",
+                  "codepipeline.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },   
+      "DeployPipeline": {
+        "Type": "AWS::CodePipeline::Pipeline",
+        "Properties": {
+            "Name": {
+                "Fn::Sub": "${AWS::StackName}-Pipeline"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                  "PipelineServiceRole",
+                  "Arn"
+              ]
+            },
+            "Stages": [
+                {
+                    "Name": "Source",
+                    "Actions": [
+                        {
+                            "Name": "TemplateSource",
+                            "ActionTypeId": {
+                                "Category": "Source",
+                                "Owner": "AWS",
+                                "Version": 1,
+                                "Provider": "CodeCommit"
+                            },
+                            "OutputArtifacts": [
+                                {
+                                    "Name": "TemplateOutput"
+                                }
+                            ],
+                            "Configuration": {
+                                "BranchName": "master",
+                                "RepositoryName": {
+                                    "Ref": "AWS::StackName"
+                                }
+                            },
+                            "RunOrder": 1
+                        }
+                        
+                    ]
+                },
+                {
+                    "Name": "Build",
+                    "Actions": [
+                        {
+                            "Name": "CodeBuild",
+                            "InputArtifacts": [
+                                {
+                                    "Name": "TemplateOutput"
+                                }
+                            ],
+                            "ActionTypeId": {
+                                "Category": "Build",
+                                "Owner": "AWS",
+                                "Version": 1,
+                                "Provider": "CodeBuild"
+                            },
+                            "OutputArtifacts": [
+                                {
+                                    "Name": "BuildArtifact"
+                                }
+                            ],
+                            "Configuration": {
+                                "ProjectName": {
+                                    "Ref": "CodeBuildProject"
+                                }
+                            },
+                            "RunOrder": 1
+                        }
+                    ]
+                },
+                {
+                    "Name": "Deploy",
+                    "Actions": [    
+                        {
+                            "Name": "CreateChangeSet",
+                            "InputArtifacts": [
+                                {
+                                    "Name": "BuildArtifact"
+                                }
+                            ],
+                            "ActionTypeId": {
+                                "Category": "Deploy",
+                                "Owner": "AWS",
+                                "Version": 1,
+                                "Provider": "CloudFormation"
+                            },
+                            "OutputArtifacts": [
+                                {
+                                    "Name": "CreatedChangeSet"
+                                }
+                            ],
+                            "Configuration": {
+                                "ActionMode": "CHANGE_SET_REPLACE",
+                                "ChangeSetName": {
+                                    "Fn::Sub": "${AWS::StackName}-changeset"
+                                },
+                                "RoleArn": {
+                                    "Fn::GetAtt": [
+                                        "CodePipelineCFNRole",
+                                        "Arn"
+                                    ]
+                                },
+                                "Capabilities": "CAPABILITY_NAMED_IAM",
+                                "StackName": {
+                                    "Fn::Sub": "${AWS::StackName}-lambdaFunction"
+                                },
+                                "TemplatePath": "BuildArtifact::outputtemplate.yml"
+                            },
+
+                            "RunOrder": 2
+                        },
+                        {
+                            "Name": "ExecuteChangeSet",
+                            "InputArtifacts": [
+                                {
+                                    "Name": "CreatedChangeSet"
+                                }
+                            ],
+                            "ActionTypeId": {
+                                "Category": "Deploy",
+                                "Owner": "AWS",
+                                "Version": 1,
+                                "Provider": "CloudFormation"
+                            },
+                            "OutputArtifacts": [
+                                {
+                                    "Name": "Deployed"
+                                }
+                            ],
+                            "Configuration": {
+                                "ActionMode": "CHANGE_SET_EXECUTE",
+                                "ChangeSetName": {
+                                    "Fn::Sub": "${AWS::StackName}-changeset"
+                                },
+                                "StackName": {
+                                    "Fn::Sub": "${AWS::StackName}-lambdaFunction"
+                                }
+                            },
+                            "RunOrder": 3
+                        }
+                    ]
+                }
+            ],
+            "ArtifactStore": {
+                "Type": "S3",
+                "Location": {
+                    "Ref": "S3BucketBuilds"
+                }
+            }
+        },
+        "DependsOn" : ["S3BucketBuilds","CodePipelineCFNRole","PipelineServiceRole", "CodeBuildProject"]
+    },
+    "S3BucketBuilds": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Description": "Creating Amazon S3 bucket for AWS CodePipeline artifacts",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": [
+            "-",
+            [
+              "aws",
+              {
+                "Ref": "AWS::Region"
+              },
+              {
+                "Ref": "AWS::AccountId"
+              },
+              {
+                "Ref": "AWS::StackName"
+              },
+              "pipe"
+            ]
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "Tags": [
+          {
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "S3Bucket"
+                ]
+              ]
+            },
+            "Key": "Name"
+          }
+        ]
+      }
+    },
+    "PipelineServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Description": "Pipeline Service Role",
+      "Properties": {
+        "RoleName": {
+            "Fn::Sub": "${AWS::StackName}-PipelineServiceRole"
+        },
+        "Path": "/service-role/",
+        "Policies": [
+          {
+            "PolicyName": {
+                "Fn::Sub": "${AWS::StackName}-PipelineServicePolicy"
+            },
+            "PolicyDocument": {
+              "Statement": [
+                  {
+                    "Action": [
+                        "iam:PassRole"
+                    ],
+                    "Resource": "*",
+                    "Effect": "Allow",
+                    "Condition": {
+                        "StringEqualsIfExists": {
+                            "iam:PassedToService": [
+                                "cloudformation.amazonaws.com",
+                                "elasticbeanstalk.amazonaws.com",
+                                "ec2.amazonaws.com",
+                                "ecs-tasks.amazonaws.com"
+                            ]
+                        }
+                    }
+                },
+                {
+                  "Action": [
+                      "codecommit:CancelUploadArchive",
+                      "codecommit:GetBranch",
+                      "codecommit:GetCommit",
+                      "codecommit:GetUploadArchiveStatus",
+                      "codecommit:UploadArchive"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                },
+
+                {
+                  "Action": [
+                      "cloudwatch:*",
+                      "s3:*",
+                      "sns:*",
+                      "cloudformation:*",
+                      "ecs:*"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                      "lambda:InvokeFunction",
+                      "lambda:ListFunctions"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                      "cloudformation:CreateStack",
+                      "cloudformation:DeleteStack",
+                      "cloudformation:DescribeStacks",
+                      "cloudformation:UpdateStack",
+                      "cloudformation:CreateChangeSet",
+                      "cloudformation:DeleteChangeSet",
+                      "cloudformation:DescribeChangeSet",
+                      "cloudformation:ExecuteChangeSet",
+                      "cloudformation:SetStackPolicy",
+                      "cloudformation:ValidateTemplate"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                      "codebuild:BatchGetBuilds",
+                      "codebuild:StartBuild"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                      "cloudformation:ValidateTemplate"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "codebuild.amazonaws.com",
+                  "codedeploy.amazonaws.com",
+                  "codepipeline.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion : '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: A simple hello world python function
+Resources:
+  HelloWorld:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Runtime: python3.6
+      Handler: hello_word.lambda_handler
+Outputs:
+    LogicalID:
+        Description: Information about the value
+        Value: !GetAtt HelloWorld.Arn
+        Export:
+            Name: muruvettestlambda

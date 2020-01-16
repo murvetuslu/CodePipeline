@@ -1,0 +1,133 @@
+{
+  "Parameters": {
+	"ALBSubnet1": {
+      "Default": "subnet-xxxxxxx",
+      "Type": "String",
+      "Description": "Application LoadBalancer Subnet"
+    },
+    "ALBSubnet2": {
+      "Default": "subnet-xxxxxxx",
+      "Type": "String",
+      "Description": "Application LoadBalancer Subnet"
+    },	
+    "VpcId": {
+      "Default": "vpc-xxxxxxxx",
+      "Type": "String",
+      "Description": "VpcId for Security Group attached Application LoadBalancer"
+    }
+  },
+  "Resources": {  
+	"TargetGroup": {
+		"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+		"Properties": {
+			"Name": {
+			  "Fn::Sub": "${AWS::StackName}-Tg"
+			 },
+			"TargetType": "lambda",
+			"Targets": [{
+			  "Id" : {
+				  "Fn::ImportValue": "muruvettestlambda"
+				}
+			  
+			}]
+		}	
+    },
+	"TargetGroupPermission": {
+	  "Type" : "AWS::Lambda::Permission",
+	  "Properties" : {
+		  "Action" : "lambda:InvokeFunction",
+		  "FunctionName" : {"Fn::ImportValue": "muruvettestlambda"},
+		  "Principal" : "elasticloadbalancing.amazonaws.com"
+		}
+	},
+	"SecurityGroup": {
+		"Type": "AWS::EC2::SecurityGroup",
+		"Properties": {
+			"GroupName": {
+				"Fn::Sub": "${AWS::StackName}-AlbSg"
+			},
+			"GroupDescription": "Generic Security Group",
+			"SecurityGroupIngress": [
+				{
+					"CidrIp": "0.0.0.0/0",
+					"FromPort": 80,
+					"IpProtocol": "tcp",
+					"ToPort": 80
+				}
+			],
+			"VpcId": {
+				"Ref": "VpcId"
+			}
+		}
+	},
+	"LoadBalancer": {
+		"Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+		"DependsOn": [
+			"SecurityGroup"
+		],
+		"Properties": {
+			"Name": {
+				"Fn::Sub": "${AWS::StackName}-Alb"
+			},
+			"Scheme": "internet-facing",
+			"SecurityGroups": [
+				{
+					"Ref": "SecurityGroup"
+				}
+			],
+			"Subnets": [
+				{
+					"Ref": "ALBSubnet1"
+				},
+				{
+				"Ref": "ALBSubnet2"
+				}
+			],
+			"Type": "application"
+		}
+	},
+	 "Listener": {
+		"Type": "AWS::ElasticLoadBalancingV2::Listener",
+		"DependsOn": [
+			"TargetGroup",
+			"LoadBalancer"
+		],
+		"Properties": {
+			"DefaultActions": [
+				{
+					"Type": "forward",
+					"TargetGroupArn": {
+						"Ref": "TargetGroup"
+					}
+				}
+			],
+			"LoadBalancerArn": {
+				"Ref": "LoadBalancer"
+			},
+			"Port": "80",
+			"Protocol": "HTTP"
+		}
+	},
+	"ListenerRule1": {
+	  "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+	  "DependsOn": ["TargetGroup","Listener"],
+	  "Properties": {
+		"Actions": [{
+		  "Type": "forward",
+		  "TargetGroupArn": { "Ref": "TargetGroup" }
+		}],
+		"Conditions": [
+			{
+				"Field": "host-header",
+				"Values": [
+					"api.example.com"
+				]
+			}
+		],
+		"ListenerArn": { "Ref": "Listener" },
+		"Priority": 1
+	  }
+	}
+  }
+}
+	
