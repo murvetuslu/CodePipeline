@@ -1,4 +1,4 @@
-# Lambda Fucntion automaticly deployment with Codepipeline
+# Lambda Fucntion automatically deployment with Codepipeline
 
 ## Pre-Requirement
 
@@ -12,8 +12,8 @@ Because When codecommit is created with cloudformation, codecommit get source fr
 Cloudformation stack have some need parameters.
 CI/CD pipeline was created when cloudformation stack create progress is completed.
 
-When the codecommit source changed, codepipeline will be triggered automaticly, then Cloudformation create a chage set with template.yml
-for Cloudformation stack where lambda function is created then The cange set will be automaticly executed. 
+When the codecommit source changed, codepipeline will be triggered automatically, then Cloudformation create a chage set with template.yml
+for Cloudformation stack where lambda function is created then The cange set will be automatically executed. 
 
 
 **Secondly**, create a another cloudformation stack via **ALbTarget.json**
